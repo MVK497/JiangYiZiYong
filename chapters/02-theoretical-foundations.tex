@@ -1,0 +1,536 @@
+\section{量子化学的理论基础}
+
+课外阅读：辨析计算化学中的任务类型和理论方法。
+\[
+\texttt{http://sobereva.com/680}
+\]
+
+\subsection*{提纲}
+
+\begin{itemize}
+  \item 0 前言
+  \item 1 量子化学常用理论方法简介
+  \item 1.1 Hartree-Fock 方法
+  \item 1.2 半经验方法
+  \item 1.3 后 HF 方法
+  \item 1.3.1 组态相互作用（configuration interaction, CI）
+  \item 1.3.2 微扰理论（perturbation theory）
+  \item 1.3.3 耦合簇方法（coupled-cluster, CC）
+  \item 1.3.4 后 HF 方法的对比
+  \item 1.4 MCSCF 与多参考方法简介
+  \item 1.5 密度泛函理论
+  \item 2 动态相关与静态相关
+  \item 3 量子化学中的轨道
+  \item 4 自旋多重度、壳层与计算形式
+  \item 5 其它
+\end{itemize}
+
+\subsection*{前言}
+
+量子化学计算的最核心问题之一是求解化学体系的薛定谔方程。由于哈密顿算符过于复杂而不可能精确求解，在实际数值求解中为了降低计算复杂度和耗时，总是用到各种近似，常见的如：
+
+\begin{itemize}
+  \item Born-Oppenheimer 近似
+  \item 有限基组近似
+  \item 单电子近似、电子相关处理上的近似
+  \item 非相对论近似
+  \item 数值计算精度上的近似
+\end{itemize}
+
+量子化学计算精度关键在于理论方法和基组这两部分。理论方法是厨师，基组是厨具，哪样差了结果都不好。应根据计算能力、对精度的要求选择最适宜的理论方法和基组的搭配。
+
+\begin{center}
+\begin{tikzpicture}[scale=0.95]
+  \draw[->, line width=1pt] (0,0) -- (5.4,0) node[right] {基组质量};
+  \draw[->, line width=1pt] (0,0) -- (0,4.6) node[above] {理论方法};
+  \draw[->, line width=1pt] (0,0) -- (4.1,3.4);
+  \node[below] at (4.5,0) {完备基组};
+  \node[below] at (4.5,-0.45) {(CBS)};
+  \node[left] at (0,4.0) {精确考虑电};
+  \node[left] at (0,3.55) {子相关作用};
+  \node[right] at (4.2,3.45) {精确解};
+\end{tikzpicture}
+\end{center}
+
+若进一步考虑相对论效应，则在“理论方法”和“基组质量”之外还需再加入一个维度。
+
+\subsection*{Born-Oppenheimer 近似}
+
+严格求解分子体系的定态薛定谔方程时，需要将电子和原子核一起按量子力学方式处理：
+
+\begin{center}
+\setlength{\fboxsep}{10pt}
+\fbox{$\displaystyle
+\hat H_{\mathrm{tot}}\Psi_{\mathrm{tot}}(\mathbf R;\mathbf r)
+=
+E_{\mathrm{tot}}\Psi_{\mathrm{tot}}(\mathbf R;\mathbf r)$}
+\end{center}
+
+由于原子核质量远大于电子，核的量子效应通常远小于电子。Born-Oppenheimer 近似（BO 近似）是量子化学计算中关键性的近似。它将核与电子的运动近似分开处理，从而使核波函数与电子波函数可分别求解，计算复杂度大为简化。总波函数写成
+\[
+\Psi_{\mathrm{tot}}(\mathbf R;\mathbf r)=\Psi_{\mathrm{nuc}}(\mathbf R)\Psi_{\mathrm{ele}}^{(\mathbf R)}(\mathbf r)
+\]
+的形式。
+
+在 BO 近似下，求解电子波函数时将核位置视为固定参数，因此它也常被称为核不动近似。对每一组核坐标 $\mathbf R$，都可以求得对应的电子能量 $E_{\mathrm{ele}}^{(\mathbf R)}$；这里的电子能量已包含核间互斥能，因此它是 $\mathbf R$ 的函数，并由此定义了势能面。通常量子化学研究中，求解电子定态方程就已经足够：
+
+\begin{center}
+\setlength{\fboxsep}{10pt}
+\fbox{$\displaystyle
+\hat H_{\mathrm{ele}}^{(\mathbf R)}\psi_{\mathrm{ele}}^{(\mathbf R)}(\mathbf r)
+=
+E_{\mathrm{ele}}^{(\mathbf R)}\psi_{\mathrm{ele}}^{(\mathbf R)}(\mathbf r)$}
+\end{center}
+
+如果研究的问题必须以量子力学方式考虑核的运动，例如量子动力学问题，则可先在不同核坐标下计算电子能量，再拟合成解析的势函数 $E_{\mathrm{pot}}(\mathbf R)$，然后求解核的定态方程，得到核波函数以及包含核运动能在内的体系总能量：
+\[
+\bigl[\hat T_{\mathrm{nuc}}+E_{\mathrm{pot}}(\mathbf R)\bigr]\Psi_{\mathrm{nuc}}(\mathbf R)
+=
+E_{\mathrm{tot}}\Psi_{\mathrm{nuc}}(\mathbf R)
+\]
+
+一种更便宜得多的考虑核运动量子效应的方法是路径积分分子动力学。
+
+相对于直接精确求解核与电子体系，采用 BO 近似来求解核的定态薛定谔方程并得到核波函数及 $E_{\mathrm{tot}}$ 时，相当于引入了以下近似：
+
+\begin{enumerate}
+  \item 绝热近似，即只考虑单个电子态。这相当于忽略了非绝热耦合矩阵（non-adiabatic coupling matrix, NACM）的非对角元；这些项描述不同电子态之间电子与核运动的耦合。
+  \item 忽略对角校正项（diagonal correction），即把非绝热耦合矩阵的对角部分也略去。它用于描述单个电子态与核运动的耦合，数量级通常较小。
+  \item 忽略质量极化项（mass polarization），它源自体系质心运动与内部运动无法严格分离。
+\end{enumerate}
+
+关于上述内容，可参看 \textit{Introduction to Computational Chemistry} 3ed 第 3.1 节。
+
+对于不涉及两个态间势能面交叉的情况，BO 近似通常是相当合理的近似。电子部分计算误差对体系总能量的影响，往往明显大于 BO 近似本身带来的影响。若希望进一步改进结果，可以在计算结束后再加入 diagonal Born-Oppenheimer correction（DBOC）：
+\[
+\Delta E_{\mathrm{DBOC}}
+=
+\sum_A^{\mathrm{atoms}}
+\left\langle
+\Psi_{\mathrm{ele}}
+\middle|
+-\frac{1}{2M_A}\nabla_A^2
+\middle|
+\Psi_{\mathrm{ele}}
+\right\rangle
+\]
+
+但在具体研究涉及的核运动范围内，若存在势能面交叉，则绝热近似由于忽略了态与态之间电子-核耦合的非对角项，会使 BO 近似下得到的能量不够合理。在研究激发态驰豫、态间跃迁等过程时，也需要用到相应电子态之间的非绝热耦合矩阵非对角元。
+
+\subsection*{实际量化计算时分子体系的哈密顿算符}
+
+在实际量化计算中，分子体系常用的电子哈密顿算符写为
+\[
+\hat H_{\mathrm{ele}}^{(\mathbf R)}
+=
+\sum_i
+\left[
+-\frac{1}{2}\nabla_i^2
+-\sum_A \frac{Z_A}{|\mathbf r_i-\mathbf R_A|}
+\right]
++
+\sum_{i>j}\frac{1}{r_{ij}}
++
+\sum_{A>B}\frac{Z_AZ_B}{|\mathbf R_A-\mathbf R_B|}
+\]
+其中，方括号内是单电子部分，包括电子动能与电子-核吸引势；后两项分别为电子间互斥势和核间互斥势。
+
+\subsection*{电子相关与对密度}
+
+电子间相互作用能也可以通过对密度来表示，这样物理图像更易于理解：
+\[
+E_{ee}
+=
+\left\langle
+\psi\middle|\sum_{i>j}\frac{1}{r_{ij}}\middle|\psi
+\right\rangle
+=
+\iint \frac{\rho(\mathbf r_1,\mathbf r_2)}{r_{12}}\,d\mathbf r_1\,d\mathbf r_2
+\]
+
+对密度可分解为
+\[
+\rho(\mathbf r_1,\mathbf r_2)
+=
+\bigl[\rho^{\alpha\alpha}(\mathbf r_1,\mathbf r_2)+\rho^{\beta\beta}(\mathbf r_1,\mathbf r_2)\bigr]
++
+\bigl[\rho^{\alpha\beta}(\mathbf r_1,\mathbf r_2)+\rho^{\beta\alpha}(\mathbf r_1,\mathbf r_2)\bigr]
+=
+\rho^{\uparrow\uparrow}(\mathbf r_1,\mathbf r_2)+\rho^{\uparrow\downarrow}(\mathbf r_1,\mathbf r_2)
+\]
+
+其中，自旋相同电子对密度和自旋相反电子对密度分别写为
+\[
+\rho^{\uparrow\uparrow}(\mathbf r_1,\mathbf r_2)
+=
+\rho^\uparrow(\mathbf r_1)\rho^\uparrow(\mathbf r_2)
++
+\Gamma^{\uparrow\uparrow}(\mathbf r_1,\mathbf r_2)
+\]
+\[
+\rho^{\uparrow\downarrow}(\mathbf r_1,\mathbf r_2)
+=
+\rho^\uparrow(\mathbf r_1)\rho^\downarrow(\mathbf r_2)
++
+\Gamma^{\uparrow\downarrow}(\mathbf r_1,\mathbf r_2)
+\]
+
+前一项是将电子近似为独立粒子时的对密度，它对 $E_{ee}$ 对应于电子云间的经典库仑互斥；后一项是交换-相关密度，即电子相关作用对对密度的修正，它会使 $E_{ee}$ 降低。
+
+\[
+\Gamma^{\uparrow\uparrow}(\mathbf r_1,\mathbf r_2)
+=
+\Gamma_C^{\uparrow\uparrow}(\mathbf r_1,\mathbf r_2)
++
+\Gamma_X^{\uparrow\uparrow}(\mathbf r_1,\mathbf r_2)
+\]
+\[
+\Gamma^{\uparrow\downarrow}(\mathbf r_1,\mathbf r_2)
+=
+\Gamma_C^{\uparrow\downarrow}(\mathbf r_1,\mathbf r_2)
+\]
+
+交换相关（X, exchange correlation）描述自旋相同电子之间的作用。自旋相同的电子间存在 Pauli 互斥，这显著影响对密度分布，也称费米相关；对体系能量的降低称为交换能 $E_X$。
+
+库仑相关（C, Coulomb correlation）描述电子间库仑互斥对对密度的影响。它会降低电子对在较近距离出现的几率，从而降低电子间互斥能；对体系能量的降低称为库仑相关能 $E_C$。
+
+交换相关作用对能量的影响数量级通常远大于库仑相关作用。因此，交换相关若考虑不合理，计算结果会完全离谱；而库仑相关哪怕不考虑，也往往不至于令结果出现定性错误，但若要达到定量精确，则必须充分考虑。
+
+\subsection*{相关穴}
+
+以 $\mathrm{H_2}$ 为例，若已知一个电子出现在某处，由于交换相关和库仑相关，发现另一个电子的概率会发生改变。根据这两个电子自旋相同还是相反，可将这种效应分为费米穴和库仑穴。
+
+费米穴表现出强离域特征，处处为负，最负值为 $-\rho(\mathbf r)$。这说明费米穴总会降低另一个同自旋电子在各处出现的概率，其全空间积分为 $-1$。
+
+库仑穴在参考点附近很负，而在其余部分较正。这表示库仑互斥使另一个电子不容易出现在离当前电子较近的区域，相应地，在更远区域出现的几率会有所增加；其全空间积分为 $0$。
+
+总相关穴由费米穴和库仑穴共同构成。
+
+\subsection*{电子相关作用示意}
+
+若不考虑电子相关，则两个电子的分布彼此独立；若考虑电子相关，则一个电子附近会形成相关穴，另一个电子更倾向于避开这一局域区域。
+
+\subsection*{平均势场近似的直观类比}
+
+不考虑行星之间相关作用时，各行星的运行轨迹可视为在平均势场中的运动；若考虑相关作用，则其它行星的轨迹会产生瞬时影响，轨道也随之偏离理想圆轨道。
+
+\begin{center}
+\begin{minipage}{0.46\textwidth}
+\centering
+\begin{tikzpicture}[scale=0.9]
+  \draw[line width=1pt] (0,0) circle (0.55);
+  \draw[gray] (0,0) circle (1.35);
+  \draw[line width=1pt] (0,0) circle (2.15);
+  \fill (0,0) circle (0.12);
+  \fill (1.1,0.78) circle (0.08);
+\end{tikzpicture}
+
+不考虑行星之间的相关作用时的运行轨迹，另两个行星的影响以平均势场近似考虑
+\end{minipage}
+\hfill
+\begin{minipage}{0.46\textwidth}
+\centering
+\begin{tikzpicture}[scale=0.9]
+  \draw[gray] (0,0) circle (0.85);
+  \draw[gray] (0,0) circle (1.7);
+  \fill (0,0) circle (0.12);
+  \draw[dashed] plot[smooth cycle, tension=0.9] coordinates {(1.6,0.1) (0.8,1.55) (-0.95,1.45) (-1.6,-0.1) (-0.85,-1.45) (1.0,-1.2)};
+  \fill (1.45,0.2) circle (0.08);
+  \fill (-1.1,1.1) circle (0.08);
+  \fill (0.35,-0.65) circle (0.08);
+\end{tikzpicture}
+
+考虑行星之间的相关作用时的运行轨迹，其它行星的轨迹产生出瞬时影响
+\end{minipage}
+\end{center}
+
+\subsection*{1\quad 量子化学常用的理论方法}
+
+常见理论方法可大致分为以下几类：
+\begin{itemize}
+  \item 半经验方法（semi-empirical），例如 DFTB、GFN-xTB；
+  \item 密度泛函理论（density functional theory, DFT）；
+  \item Hartree-Fock（HF）；
+  \item 后 HF 方法（post-HF），包括微扰理论（perturbation theory）、耦合簇（coupled cluster）、组态相互作用（configuration interaction）、多组态自洽场（MCSCF）以及多参考方法（如 MRCI、CASPT2 等）；
+  \item 分子力场方法，它不属于量子化学方法。
+\end{itemize}
+
+从头算通常指计算过程中不依赖经验参数的方法，但允许为了加速计算而引入数值近似。至于 DFT 是否严格算作从头算并无必要过分较真。“第一性原理”在字面意义上与从头算相近，但通常包含 DFT，而实际最常用的也正是 DFT。
+
+从精度和花费的粗略排序来看，半经验方法最低，HF 与 DFT 居中，各种形式的后 HF 更高，Full CI 在概念上最为完备。DFT 的计算花费与 HF 相仿，但在描述动态相关方面经验上远优于 HF，因此如今是最常用的方法；HF 单独用于实际研究已经很少见，但它作为后 HF 方法的基础仍然非常重要。
+
+\subsubsection*{1.1\quad Hartree-Fock 方法}
+
+分子体系的哈密顿算符包含多电子间的相互作用，严格求解十分困难。HF 方法将多电子问题转化为单电子问题来处理。它定义了 Fock 算符，使每个电子都看作在其余电子产生的平均势场中运动，这就是单电子近似。
+
+多电子问题满足
+\[
+\hat H\psi=E\psi
+\]
+在 HF 近似下，转化为单电子方程
+\begin{center}
+\setlength{\fboxsep}{10pt}
+\fbox{$\displaystyle
+\hat F_i\,\varphi_a(\mathbf r_i)=\varepsilon_a\,\varphi_a(\mathbf r_i)$}
+\end{center}
+
+其中，$\hat F_i$ 是 Fock 算符，可看作单电子哈密顿算符；$\varphi_a$ 为 HF 轨道，也可视作分子轨道；$\varepsilon_a$ 为 HF 轨道能量。实际计算中，HF 轨道通常通过一套单电子基函数的线性组合来表示，也即 LCAO 形式。
+
+Fock 算符可写为
+\[
+\hat F_i
+=
+-\frac{1}{2}\nabla_i^2
+-\sum_A \frac{Z_A}{r_{iA}}
++V(\mathbf r_i)
+\]
+其中，$V(\mathbf r_i)$ 表示其它电子对第 $i$ 个电子产生的平均势场：
+\[
+V(\mathbf r_i)
+=
+\int \frac{\rho(\mathbf r')}{|\mathbf r_i-\mathbf r'|}\,d\mathbf r'
++\xi(\mathbf r_i)
+\]
+前一项是库仑势，来源于经典静电相互作用；后一项是交换势，它来自波函数的反对称要求，纯粹源于量子力学，没有经典物理图像。
+
+因此，HF 使用单电子近似，并不是说某个电子完全不受其它电子影响，而是说它感受到的是其它电子的平均作用。
+
+HF 轨道按能量从低到高填充，遵循 aufbau 原理。最低的 $N$ 个轨道为占据轨道（occupied orbitals），其余为非占据轨道，也称空轨道或虚轨道（virtual orbitals）。
+
+虽然 HF 采用单电子近似，每个电子都视作独立粒子，但体系波函数不能简单写成占据 HF 轨道的直接乘积，因为总波函数必须满足费米子交换反对称要求。因此，HF 波函数必须写成 Slater 行列式形式：
+\[
+\Psi_{\mathrm{HF}}(\mathbf r_1,\mathbf r_2,\ldots,\mathbf r_N)
+=
+\frac{1}{\sqrt{N!}}
+\begin{vmatrix}
+\varphi_1(\mathbf r_1) & \varphi_2(\mathbf r_1) & \cdots & \varphi_N(\mathbf r_1) \\
+\varphi_1(\mathbf r_2) & \varphi_2(\mathbf r_2) & \cdots & \varphi_N(\mathbf r_2) \\
+\vdots & \vdots & \ddots & \vdots \\
+\varphi_1(\mathbf r_N) & \varphi_2(\mathbf r_N) & \cdots & \varphi_N(\mathbf r_N)
+\end{vmatrix}
+\equiv
+\lvert \varphi_1\varphi_2\cdots\varphi_N\rangle
+\]
+
+式前的系数是归一化系数。交换任意两个电子坐标，相当于交换行列式中的两行，波函数符号会改变，因此这一形式自动满足反对称要求；若有两个电子占据相同轨道，则行列式为零，也与 Pauli 不相容原理一致。
+
+\subsubsection*{开壳层与闭壳层例子}
+
+以基态 Li 原子 $\left(1s^2\,2s^1\right)$ 为例，它是开壳层体系，包含三个电子，此时波函数可用三个自旋轨道描述：
+\[
+\Psi(\mathbf r_1,\mathbf r_2,\mathbf r_3)
+=
+\lvert \varphi_{1s}^{\alpha}\varphi_{1s}^{\beta}\varphi_{2s}^{\alpha}\rangle
+=
+\frac{1}{\sqrt{6}}
+\begin{vmatrix}
+\varphi_{1s}^{\alpha}(\mathbf r_1) & \varphi_{1s}^{\beta}(\mathbf r_1) & \varphi_{2s}^{\alpha}(\mathbf r_1) \\
+\varphi_{1s}^{\alpha}(\mathbf r_2) & \varphi_{1s}^{\beta}(\mathbf r_2) & \varphi_{2s}^{\alpha}(\mathbf r_2) \\
+\varphi_{1s}^{\alpha}(\mathbf r_3) & \varphi_{1s}^{\beta}(\mathbf r_3) & \varphi_{2s}^{\alpha}(\mathbf r_3)
+\end{vmatrix}
+\]
+
+以基态 Be 原子 $\left(1s^2\,2s^2\right)$ 为例，它是闭壳层体系，包含四个电子。由于电子都是成对的，一对电子可用一个空间轨道描述，因此只需考虑两个空间轨道。对其中一对电子，波函数可写为
+\[
+\Psi(\mathbf r_1,\mathbf r_2)
+=
+\lvert \varphi_{1s}\varphi_{2s}\rangle
+=
+\frac{1}{\sqrt{2}}
+\begin{vmatrix}
+\varphi_{1s}(\mathbf r_1) & \varphi_{2s}(\mathbf r_1) \\
+\varphi_{1s}(\mathbf r_2) & \varphi_{2s}(\mathbf r_2)
+\end{vmatrix}
+=
+\frac{1}{\sqrt{2}}
+\bigl[
+\varphi_{1s}(\mathbf r_1)\varphi_{2s}(\mathbf r_2)
+-\varphi_{2s}(\mathbf r_1)\varphi_{1s}(\mathbf r_2)
+\bigr]
+\]
+
+若把闭壳层体系按开壳层方式处理，则需要更多自旋轨道，计算耗时更高，但结果完全一样。
+
+\subsubsection*{HF 方法的变分基础}
+
+HF 方程实际上是基于单个 Slater 行列式形式的波函数，通过令体系能量对波函数进行变分并求极小值得到的：
+\[
+\min \bigl(\langle \Psi_{\mathrm{HF}}\lvert \hat H \rvert \Psi_{\mathrm{HF}}\rangle\bigr)
+\]
+
+HF 方法对于 HF 波函数而言，精确考虑了自旋相同电子之间的交换相关作用，因为其 Slater 行列式形式完全满足反对称原理；但由于采用单电子近似，它完全忽略了电子间的库仑相关作用。
+
+由于交换相关作用的重要性和数量级都远大于库仑相关作用，因此 HF 的结果通常仍具有定性正确性；但忽略库仑相关也导致其计算精度不高。
+
+HF 虽然基于单电子近似，但体系总能量并不是所有占据轨道能量的简单加和。每个占据轨道都与其它占据轨道存在经典库仑作用和交换相关作用，若直接相加会把电子间相互作用重复计算一遍，因此在 HF 总能量表达式中需要将这部分扣除。
+
+\subsubsection*{Hartree-Fock-Roothaan 方程}
+
+在实际计算中，HF 方程
+\[
+\hat F\varphi=\varepsilon\varphi
+\]
+通常通过 Roothaan 于 1951 年提出的矩阵形式求解，称为 Hartree-Fock-Roothaan（HFR）方程：
+
+\begin{center}
+\setlength{\fboxsep}{10pt}
+\fbox{$\displaystyle FC=SC\varepsilon$}
+\end{center}
+
+其中
+\[
+F_{\mu\nu}=\langle \chi_\mu \lvert \hat F \rvert \chi_\nu \rangle
+\]
+\[
+S_{\mu\nu}=\langle \chi_\mu \mid \chi_\nu \rangle
+\]
+\[
+\varepsilon_{ii}=\text{轨道能量},\qquad \varepsilon_{i\neq j}=0
+\]
+
+若计算时基函数数目为 $N$，则这些矩阵维度均为 $N\times N$，因此求解可得到 $N$ 个轨道。
+
+由于常用基函数一般不是正交的，而是彼此存在重叠，因此出现了重叠矩阵 $S$。$F$ 称为 Fock 矩阵，是 Fock 算符在当前基组下的矩阵表示；$C$ 是系数矩阵，每一列对应一个分子轨道在各个基函数上的展开系数。
+
+实际求解时，先构建 $F$，再通过 Löwdin 正交化消去 $S$，把 Fock 矩阵变为正交基下的 $F'$；随后对 $F'$ 对角化，得到正交基下的本征矢矩阵 $C'$ 和本征值矩阵 $\varepsilon$，最后再逆正交化，将 $C'$ 变换回原基函数下的系数矩阵 $C$。
+
+\subsubsection*{Fock 矩阵、双电子积分与密度矩阵}
+
+HF 计算中最耗时的部分通常是双电子积分，其次是构建 Fock 矩阵。闭壳层情形下，Fock 矩阵元可写为
+\[
+F_{\mu\nu}
+=
+\langle \chi_\mu \lvert \hat h \rvert \chi_\nu \rangle
++
+\sum_{\lambda\sigma} P_{\lambda\sigma}
+\left[
+(\mu\nu\vert \sigma\lambda)-\frac{1}{2}(\mu\lambda\vert \sigma\nu)
+\right]
+\]
+
+其中双电子积分（四指标）定义为
+\[
+(\mu\nu\vert \sigma\lambda)
+=
+\iint
+\frac{\chi_\mu(\mathbf r_1)\chi_\nu(\mathbf r_1)\chi_\sigma(\mathbf r_2)\chi_\lambda(\mathbf r_2)}{r_{12}}
+\,
+d\mathbf r_1\,d\mathbf r_2
+\]
+
+密度矩阵可通过轨道系数快速构建，它是对当前体系波函数的一种宏观而紧凑的描述形式。闭壳层形式下，
+\[
+P_{\lambda\sigma}
+=
+2\sum_{i=1}^{N_{\mathrm{ele}}/2} C_{\lambda i}C_{\sigma i}
+\]
+
+\subsubsection*{单电子算符与单电子积分}
+
+单电子算符定义为
+\[
+\hat h
+=
+-\frac{1}{2}\nabla^2
+-\sum_A \frac{Z_A}{\lvert \mathbf r-\mathbf R_A\rvert}
+\]
+
+单电子积分满足
+\[
+\langle \chi_\mu \lvert \hat h \rvert \chi_\nu \rangle
+=
+T_{\mu\nu}
++
+\sum_A V_{\mu\nu}^{A}
+\]
+其中，动能积分为
+\[
+T_{\mu\nu}
+=
+-\frac{1}{2}\int \chi_\mu(\mathbf r)\nabla^2\chi_\nu(\mathbf r)\,d\mathbf r
+\]
+核吸引势积分为
+\[
+V_{\mu\nu}^{A}
+=
+-\int \chi_\mu(\mathbf r)\frac{Z_A}{\lvert \mathbf r-\mathbf R_A\rvert}\chi_\nu(\mathbf r)\,d\mathbf r
+\]
+
+\subsubsection*{SCF 迭代流程}
+
+HF 方程并不是一步就能直接求解出来。因为构建 Fock 矩阵需要密度矩阵，但密度矩阵在事先又未知，所以基于 HFR 公式计算时，必须先对波函数作一个初始猜测，再由它构造近似的 Fock 矩阵；对角化后得到近似的 HF 能量与波函数，再由该波函数构造更准确的 Fock 矩阵，如此反复，直到体系能量和波函数的变化都很小，任务宣告正常结束。
+
+\begin{center}
+\begin{tikzpicture}[x=1cm,y=1cm,>=stealth]
+  \tikzstyle{box}=[draw, rectangle, minimum width=3.4cm, minimum height=0.95cm, align=center]
+  \node[box] (guess) at (0,0) {初猜波函数};
+  \node[box] (fock) at (0,-1.7) {构建 Fock 矩阵};
+  \node[box] (diag) at (0,-3.4) {对角化 Fock 矩阵得到\\能量和系数矩阵};
+  \node[box] (density) at (0,-5.2) {构建密度矩阵};
+  \node[box] (judge) at (0,-6.9) {判断收敛};
+  \node[box] (eri) at (4.4,-1.7) {电子积分};
+  \node[box] (end) at (5.3,-6.9) {正常结束，输出能量、轨道\\系数等信息};
+
+  \draw[->] (guess) -- (fock);
+  \draw[->] (fock) -- (diag);
+  \draw[->] (diag) -- (density);
+  \draw[->] (density) -- (judge);
+  \draw[->] (eri) -- (fock);
+  \draw[->] (judge) -- node[above] {已收敛} (end);
+  \draw[->] (judge.west) -- ++(-2.0,0) node[midway,below] {未收敛} -- ++(0,5.2) -- (fock.west);
+\end{tikzpicture}
+\end{center}
+
+HF 方程这种迭代求解的方法也称为自洽场（self-consistent field, SCF）计算。其物理意义相当于
+\[
+\text{波函数}_0 \rightarrow \text{平均场}_0 \rightarrow \text{波函数}_1 \rightarrow \text{平均场}_1 \rightarrow \cdots
+\]
+通过迭代不断交替更新波函数与平均场，最终使得在当前波函数所建立的平均场中产生的波函数恰与当前波函数一致。
+
+\begin{center}
+\begin{tikzpicture}[x=1cm,y=1cm,>=stealth]
+  \node[draw, rounded corners, minimum width=2.3cm, minimum height=0.9cm] (psi) at (0,0.9) {波函数};
+  \node[draw, rounded corners, minimum width=2.3cm, minimum height=0.9cm] (field) at (0,-0.9) {平均场};
+  \draw[->] (psi.east) .. controls (1.3,0.9) and (1.3,-0.9) .. node[right] {构建} (field.east);
+  \draw[->] (field.west) .. controls (-1.3,-0.9) and (-1.3,0.9) .. node[left] {求解} (psi.west);
+\end{tikzpicture}
+\end{center}
+
+本质上，这也等价于从初猜波函数出发，不断逼近 HF 能量在轨道系数空间中的极小点。对全部占据轨道和基函数而言，在同时施加轨道正交归一约束时，应满足
+\[
+\frac{\partial E}{\partial C_{\mu i}}=0
+\]
+
+\subsubsection*{SCF 收敛与初猜}
+
+SCF 迭代一般在 30 圈以内可以收敛，但在实际问题中，不收敛和难收敛都很常见。可用于辅助收敛的方法很多，例如 DIIS、二次收敛方法（QC）、移位、温度展宽、施加阻尼以及调整初猜等。
+
+大多数程序采用 incremental Fock 方法来加速 SCF 计算，即不是每一轮迭代都根据 Fock 矩阵的公式完整构建它，而是只在上一轮 Fock 矩阵上增量更新。这种方法在弥散函数较多时可能导致难收敛。
+
+产生初猜的方法也很多，例如核哈密顿、扩展休克尔方法、GWH、重叠原子密度（SAD）以及 Harris 泛函等。其中 SAD 的使用最为广泛。
+
+\subsubsection*{SCF 迭代过程中双电子积分的处理}
+
+如果计算中使用了 $N$ 个基函数，则共有约 $N^4/8$ 个双电子积分，因为它们满足八重对称关系：
+\[
+(\mu\nu\vert \sigma\lambda)
+=(\nu\mu\vert \sigma\lambda)
+=(\mu\nu\vert \lambda\sigma)
+=(\nu\mu\vert \lambda\sigma)
+\]
+\[
+=(\sigma\lambda\vert \mu\nu)
+=(\sigma\lambda\vert \nu\mu)
+=(\lambda\sigma\vert \mu\nu)
+=(\lambda\sigma\vert \nu\mu)
+\]
+
+如果内存够大，可以采用 incore 方式做 SCF，即在最初计算一次双电子积分后将其全部保存在内存中，后续各轮 SCF 迭代直接调用。一般情况下，内存并不足以容纳这么多双电子积分；例如用 6-31G$^{**}$ 计算苯需要约 103 MB，而计算卟啉（38 原子）已需要约 21 GB，若基组提升到 def2-TZVP 则需要约 437 GB。
+
+大多数计算采用 direct 方式做 SCF，即在每轮迭代中一边构建 Fock 矩阵元，一边计算所需的双电子积分。它消耗的内存很少，但由于每次迭代都需要把所有双电子积分重新计算一遍，总耗时通常明显高于 incore 方式。不过可以通过积分屏蔽避免计算数值很小的积分，从而有效降低耗时，尤其对大体系更是如此。
+
+conventional 方式和 incore 一样，也是在一开始就把积分算出来备用，但它将积分存到硬盘上。由于硬盘远慢于内存，而现代 CPU 算积分也很快，因此现在 HF 计算里几乎不会再用 conventional 模式，除非是基函数很少的极小体系；而且此模式也非常消耗硬盘，稍大一点体系的所有积分往往根本存不下。
+
+semidirect 是 incore 与 direct 的混合。对于计算代价昂贵的积分，它会存到内存或硬盘中；而每轮迭代时只重新计算便宜的积分，从而在存储空间与计算效率之间取得权衡。支持此模式的程序很少。
+
+\subsubsection*{1.2\quad 半经验方法}

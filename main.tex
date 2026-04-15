@@ -1,0 +1,58 @@
+\documentclass[12pt,a4paper,UTF8]{ctexart}
+
+\usepackage[margin=2.4cm]{geometry}
+\usepackage{amsmath,amssymb,bm}
+\usepackage{array}
+\usepackage{booktabs}
+\usepackage{graphicx}
+\usepackage{longtable}
+\usepackage{setspace}
+\usepackage{tikz}
+
+\begin{document}
+
+\thispagestyle{empty}
+\begin{center}
+  \zihao{2} 目录
+\end{center}
+
+\vspace{1.5em}
+\onehalfspacing
+
+\begin{longtable}{>{\raggedright\arraybackslash}p{0.74\textwidth} >{\raggedleft\arraybackslash}p{0.14\textwidth}}
+\endhead
+
+量子力学概要 & 1 \\
+量子化学的理论基础 & 8 \\
+基组 & 50 \\
+Gaussian 的相关知识 & 69 \\
+GaussView 的使用与分子结构的构建 & 88 \\
+单点能的计算与相关问题 & 97 \\
+势能面的相关概念 & 119 \\
+几何优化 & 122 \\
+过渡态搜索 & 139 \\
+IRC 的计算与化学反应相关问题 & 151 \\
+势能面扫描 & 164 \\
+振动分析与红外、拉曼、VCD、ROA 光谱 & 175 \\
+热力学量与能量相关性质的计算 & 201 \\
+弱相互作用的计算与相关问题 & 229 \\
+溶剂模型与溶剂相关问题 & 253 \\
+激发态与电子光谱 Part 1：理论基础 & 278 \\
+激发态与电子光谱 Part 2：计算与分析实例 & 307 \\
+反应速率常数的计算 & 335 \\
+磁相关性质的计算 & 354 \\
+（超）极化率的计算 & 369 \\
+广义与相对论量子化学初步 & 382 \\
+分子力学计算、QM/MM 与 ONIOM 方法 & 393 \\
+MOPAC 使用简介 & 412 \\
+周期性计算简介 & 416 \\
+杂项：外电场、背景电荷、偶极矩与多极矩、超精细耦合、$g$ 张量、光学旋转 & 423 \\
+量子化学程序盘点 & 436 \\
+\end{longtable}
+
+\clearpage
+\input{chapters/01-quantum-mechanics-overview}
+\clearpage
+\input{chapters/02-theoretical-foundations}
+
+\end{document}
